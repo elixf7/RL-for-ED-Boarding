@@ -10,7 +10,7 @@ from patient import Patient, sample_treatment_duration
 # Constants
 
 # Number of beds for each type
-BED_CAPACITY = {"trauma": 4, "main": 35, "chair": 15}
+BED_CAPACITY = {"trauma": 2, "main": 18, "chair": 8}
 
 # ESI proportions from MIMIC-IV-ED dataset for incoming patients
 _ESI_RAW = [0.070, 0.330, 0.540, 0.060, 0.002]  # ESI 1-5
@@ -35,7 +35,7 @@ WAIT_PENALTY = {1: 5.0, 2: 3.0, 3: 1.5, 4: 0.75, 5: 0.25}
 GUIDELINE_EXTRA_PENALTY = {1: 10.0, 2: 5.0}
 
 # Guidline target treatment times for ESI 1/2 in steps
-GUIDELINE_STEPS = {1: 0, 2: 3}
+GUIDELINE_STEPS = {1: 1, 2: 4}
 
 # How many steps a patient waits before leaving
 LWBS_THRESHOLD = 48
@@ -45,14 +45,18 @@ LWBS_THRESHOLD = 48
 
 # Discharge reward
 # If discharged from non ideal bed there is a small penalty as well
-DISCHARGE_REWARD = 10.0
+DISCHARGE_REWARD = 20.0
 DISCHARGE_REWARD_WRONG_BED = {
-    1: 4.0,   # ESI 1 in main instead of trauma - significant downgrade
-    2: 7.0,   # ESI 2 in main instead of trauma - minor downgrade
-    3: 6.0,   # ESI 3 in chair instead of main  - moderate downgrade
+    1: 5.0,   # ESI 1 in main instead of trauma - significant downgrade
+    2: 10.0,   # ESI 2 in main instead of trauma - minor downgrade
+    3: 13.0,   # ESI 3 in chair instead of main  - moderate downgrade
 }
+# Small reward for successfully admitting any patient
+# Encourages agent to keep beds occupied rather than idling
+ADMISSION_REWARD = 2.0
+
 # Penalty for leaving without being seen
-LWBS_PENALTY = 20.0
+LWBS_PENALTY = {1: 50.0, 2: 35.0, 3: 20.0, 4: 15.0, 5: 15.0}
 
 # Length of total episode, 24 hours for now
 EPISODE_LENGTH = 288
@@ -157,7 +161,7 @@ class EmergencyDeptEnv(gym.Env):
         # track overall reward for step
         reward = 0.0
 
-        # 1. PROCESS ACTION
+        # PROCESS ACTION
 
         # Process action if its not "do nothing"
         if action > 0:
@@ -175,9 +179,10 @@ class EmergencyDeptEnv(gym.Env):
                     patient.admission_step = self.current_step
                     self.beds[bed_type].append(patient)
                     self.waiting_queue.remove(patient)
+                    reward += ADMISSION_REWARD  # reward for keeping beds in use
                 # If bed_type is None no valid bed available and action is ignored
 
-        # 2. ADRESS ADMITTED PATIENTS
+        # ADRESS ADMITTED PATIENTS
 
         # Loop through each bed type
         for bed_type in self.beds:
@@ -206,7 +211,7 @@ class EmergencyDeptEnv(gym.Env):
             # Update patients left in beds with still_in_bed
             self.beds[bed_type] = still_in_bed
 
-        # 3. REMOVE PATIENTS WHO HAVE WAITED TOO LONG
+        # REMOVE PATIENTS WHO HAVE WAITED TOO LONG
 
         still_waiting = []
         # loop through patients in waiting queue
@@ -214,13 +219,13 @@ class EmergencyDeptEnv(gym.Env):
             # Remove if steps has exceeded LWBS limit and apply penalty
             if patient.steps_waiting(self.current_step) >= LWBS_THRESHOLD:
                 patient.left_without_seen = True
-                reward -= LWBS_PENALTY
+                reward -= LWBS_PENALTY[patient.esi]
                 self.total_lwbs += 1
             else:
                 still_waiting.append(patient)
         self.waiting_queue = still_waiting
 
-        # 4. APPLY WAIT PENALTIES
+        # APPLY WAIT PENALTIES
         for patient in self.waiting_queue:
             # Wait penalty weighted by ESI level
             reward -= WAIT_PENALTY[patient.esi]
