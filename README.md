@@ -2,7 +2,7 @@
 
 A Deep Q-Network that learns to manage patient boarding in a simulated emergency department, balancing clinical acuity, patient throughput, and bed utilization under uncertainty. The agent is trained and evaluated against three heuristic baselines in a custom [Gymnasium](https://gymnasium.farama.org/) environment grounded in real ED data from the MIMIC-IV-ED dataset.
 
-📄 **[Read the full report (PDF)](DATA_780_Final_Report.pdf)** for the complete methodology, figures, and results.
+📄 **[Read the full report (PDF)](Final_Report.pdf)** for the complete methodology, figures, and results.
 
 ## Overview
 
